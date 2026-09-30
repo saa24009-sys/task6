@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>posapp - シンプルPOSレジ</title>
+    <!-- Tailwind CSS for UI Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Sales Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-800 antialiased">
+
+    <!-- Navigation Header -->
+    <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-cash-register text-2xl text-amber-300"></i>
+                <h1 class="text-xl font-extrabold tracking-tight">posapp <span class="text-xs bg-indigo-500/80 px-2.5 py-0.5 rounded-full font-normal">レジ記録</span></h1>
+            </div>
+            
+            <!-- Dynamic User Status & Logout -->
+            <div id="userHeaderArea" class="hidden flex items-center space-x-3">
+                <div class="flex items-center space-x-2 bg-indigo-700/70 px-3 py-1.5 rounded-full border border-indigo-500/40">
+                    <img id="userAvatar" src="" alt="User Avatar" class="w-7 h-7 rounded-full border border-white/60 object-cover">
+                    <span id="userName" class="text-xs sm:text-sm font-medium max-w-[120px] sm:max-w-[180px] truncate">ユーザー</span>
+                </div>
+                <button id="logoutBtn" class="bg-indigo-700 hover:bg-indigo-800 text-white text-xs px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5 border border-indigo-500/30 active:scale-95 shadow-sm">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span class="hidden sm:inline">ログアウト</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- 1. AUTHENTICATION / LOGIN SCREEN -->
+        <section id="loginView" class="flex flex-col items-center justify-center min-h-[70vh] py-12">
+            <div class="bg-white p-8 sm:p-10 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full text-center space-y-6">
+                <div class="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-3xl shadow-inner">
+                    <i class="fa-solid fa-cash-register"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800">posapp にログイン</h2>
+                    <p class="text-slate-500 text-sm mt-2 leading-relaxed">販売データの記録・集計を行うPOSアプリです。<br>ご利用にはGoogleアカウントでの認証が必要です。</p>
+                </div>
+
+                <div id="loginErrorMessage" class="hidden p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs text-left"></div>
+
+                <button id="googleLoginBtn" class="w-full flex items-center justify-center space-x-3 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-3.5 px-4 border border-slate-300 rounded-xl shadow-sm transition-all hover:shadow duration-200 active:scale-95">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span>Google アカウントでログイン</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 2. MAIN APPLICATION DASHBOARD -->
+        <section id="appView" class="hidden space-y-6">
+            
+            <!-- KPI Overview Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">本日の売上合計</p>
+                        <p id="kpiTodayTotal" class="text-2xl font-black text-indigo-600 mt-1">¥0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center text-xl shadow-inner">
+                        <i class="fa-solid fa-calendar-day"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">全売上累計</p>
+                        <p id="kpiGrandTotal" class="text-2xl font-black text-emerald-600 mt-1">¥0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-xl shadow-inner">
+                        <i class="fa-solid fa-coins"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">総販売件数</p>
+                        <p id="kpiTotalCount" class="text-2xl font-black text-amber-600 mt-1">0 件</p>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center text-xl shadow-inner">
+                        <i class="fa-solid fa-receipt"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Grid: Entry Form + Analytics Chart -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Left: POS Sales Entry Form -->
+                <div class="lg:col-span-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 id="formTitle" class="text-lg font-bold text-slate-800 mb-4 flex items-center justify-between">
+                        <span><i class="fa-solid fa-circle-plus text-indigo-600 mr-2"></i>売上データを登録</span>
+                        <button id="cancelEditBtn" class="hidden text-xs text-slate-500 hover:text-slate-800 underline font-normal">キャンセル</button>
+                    </h2>
+
+                    <!-- Inline Error Alert -->
+                    <div id="formErrorAlert" class="hidden mb-4 p-3.5 bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl flex items-center space-x-2">
+                        <i class="fa-solid fa-circle-exclamation text-base flex-shrink-0"></i>
+                        <span id="formErrorText">入力内容を確認してください。</span>
+                    </div>
+
+                    <form id="posForm" class="space-y-4">
+                        <input type="hidden" id="editDocId" value="">
+
+                        <!-- 1. 商品名 (Item Name) -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1" for="itemName">商品名 <span class="text-red-500">*</span></label>
+                            <input type="text" id="itemName" required placeholder="例: カフェラテ, サンドイッチ" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition-all">
+                        </div>
+
+                        <!-- 2 & 3. 単価 (Unit Price) & 個数 (Quantity) -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase mb-1" for="unitPrice">単価 (円) <span class="text-red-500">*</span></label>
+                                <input type="number" id="unitPrice" min="0" step="1" required placeholder="450" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase mb-1" for="quantity">個数 <span class="text-red-500">*</span></label>
+                                <input type="number" id="quantity" min="1" step="1" value="1" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <!-- Auto-calculated Subtotal Display -->
+                        <div class="bg-indigo-50/80 p-3.5 rounded-xl border border-indigo-100 flex items-center justify-between">
+                            <span class="text-xs font-bold text-indigo-900">小計 (自動計算):</span>
+                            <span id="calculatedTotal" class="text-xl font-black text-indigo-700">¥0</span>
+                        </div>
+
+                        <!-- 4. 日付 (Sale Date) -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1" for="saleDate">日付 <span class="text-red-500">*</span></label>
+                            <input type="date" id="saleDate" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition-all">
+                        </div>
+
+                        <!-- 5. メモ (Memo) -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1" for="memo">メモ</label>
+                            <textarea id="memo" rows="2" placeholder="備考、顧客情報、割引内容など..." class="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition-all"></textarea>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" id="submitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-indigo-200 transition-all active:scale-[0.99] flex items-center justify-center space-x-2 text-sm">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span id="submitBtnText">登録する</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right: Chart / Sales Analytics Graph -->
+                <div class="lg:col-span-7 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-chart-line text-emerald-500 mr-2"></i>日別売上推移
+                            </h2>
+                            <span class="text-xs text-slate-400">日付ごとの集計グラフ</span>
+                        </div>
+                        <div class="relative w-full h-64 sm:h-72">
+                            <canvas id="salesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales Data History List Section -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                
+                <!-- Filters & Controls Header -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-list-ul text-indigo-600 mr-2"></i>販売履歴一覧
+                    </h2>
+
+                    <!-- Filter Controls -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- User Scope Filter Toggle -->
+                        <div class="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200">
+                            <button id="filterMyDataBtn" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-white text-indigo-600 shadow-sm transition-all">自分の記録</button>
+                            <button id="filterAllDataBtn" class="px-3 py-1.5 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all">全ユーザー</button>
+                        </div>
+
+                        <!-- Item Search Input -->
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+                            <input type="text" id="searchInput" placeholder="商品名で検索..." class="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-36 sm:w-48">
+                        </div>
+
+                        <!-- Date Filter Input -->
+                        <input type="date" id="dateFilterInput" class="px-2.5 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600">
+                        
+                        <!-- Clear Filters -->
+                        <button id="clearFiltersBtn" title="フィルター解除" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg text-xs">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Desktop Table View -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-600">
+                        <thead class="bg-slate-50 text-slate-500 font-bold text-xs uppercase border-y border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4">日付</th>
+                                <th class="py-3 px-4">商品名</th>
+                                <th class="py-3 px-4 text-right">単価</th>
+                                <th class="py-3 px-4 text-center">個数</th>
+                                <th class="py-3 px-4 text-right">合計金額</th>
+                                <th class="py-3 px-4">メモ</th>
+                                <th class="py-3 px-4">登録者</th>
+                                <th class="py-3 px-4 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salesTableBody" class="divide-y divide-slate-100">
+                            <!-- Dynamic Content Inserted by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile Responsive Cards View -->
+                <div id="salesMobileCards" class="grid grid-cols-1 gap-3 md:hidden">
+                    <!-- Dynamic Content Inserted by JS -->
+                </div>
+
+                <!-- Empty State Indicator -->
+                <div id="emptyState" class="hidden py-12 text-center text-slate-400">
+                    <i class="fa-solid fa-inbox text-4xl mb-2 text-slate-300"></i>
+                    <p class="text-sm">該当する販売記録が見つかりません。</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            &copy; posapp - Real-time POS System with Firebase & GitHub.
+        </div>
+    </footer>
+
+    <!-- Firebase SDK v11 (Modular) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signOut, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            doc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration (Provided by User)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA7T60xrbCuClsc6xB8CN6HPoofRvrr-UY",
+            authDomain: "task6-af76a.firebaseapp.com",
+            projectId: "task6-af76a",
+            storageBucket: "task6-af76a.firebasestorage.app",
+            messagingSenderId: "807817578932",
+            appId: "1:807817578932:web:5b2d3011b8ba970d82cae1"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        // Application State
+        let currentUser = null;
+        let allSalesData = [];
+        let activeFilter = 'my'; // 'my' or 'all'
+        let chartInstance = null;
+
+        // DOM Elements
+        const loginView = document.getElementById('loginView');
+        const appView = document.getElementById('appView');
+        const googleLoginBtn = document.getElementById('googleLoginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const userHeaderArea = document.getElementById('userHeaderArea');
+        const userAvatar = document.getElementById('userAvatar');
+        const userName = document.getElementById('userName');
+        const loginErrorMessage = document.getElementById('loginErrorMessage');
+
+        const posForm = document.getElementById('posForm');
+        const itemNameInput = document.getElementById('itemName');
+        const unitPriceInput = document.getElementById('unitPrice');
+        const quantityInput = document.getElementById('quantity');
+        const calculatedTotal = document.getElementById('calculatedTotal');
+        const saleDateInput = document.getElementById('saleDate');
+        const memoInput = document.getElementById('memo');
+        const editDocIdInput = document.getElementById('editDocId');
+        const submitBtnText = document.getElementById('submitBtnText');
+        const formTitle = document.getElementById('formTitle');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const formErrorAlert = document.getElementById('formErrorAlert');
+        const formErrorText = document.getElementById('formErrorText');
+
+        const filterMyDataBtn = document.getElementById('filterMyDataBtn');
+        const filterAllDataBtn = document.getElementById('filterAllDataBtn');
+        const searchInput = document.getElementById('searchInput');
+        const dateFilterInput = document.getElementById('dateFilterInput');
+        const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+
+        const salesTableBody = document.getElementById('salesTableBody');
+        const salesMobileCards = document.getElementById('salesMobileCards');
+        const emptyState = document.getElementById('emptyState');
+
+        // Set default date to today (YYYY-MM-DD)
+        saleDateInput.value = new Date().toISOString().split('T')[0];
+
+        // Authentication Observer
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                userName.textContent = user.displayName || user.email || "ユーザー";
+                userAvatar.src = user.photoURL || "https://placehold.co/100x100/4f46e5/ffffff?text=U";
+                
+                loginView.classList.add('hidden');
+                appView.classList.remove('hidden');
+                userHeaderArea.classList.remove('hidden');
+
+                // Start realtime sync with Firestore
+                listenToSalesData();
+            } else {
+                currentUser = null;
+                loginView.classList.remove('hidden');
+                appView.classList.add('hidden');
+                userHeaderArea.classList.add('hidden');
+            }
+        });
+
+        // Google Sign-In Action
+        googleLoginBtn.addEventListener('click', async () => {
+            try {
+                loginErrorMessage.classList.add('hidden');
+                await signInWithPopup(auth, provider);
+            } catch (error) {
+                console.error("Login failed:", error);
+                loginErrorMessage.textContent = "ログインに失敗しました: " + error.message;
+                loginErrorMessage.classList.remove('hidden');
+            }
+        });
+
+        // Logout Action
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                resetForm();
+            } catch (error) {
+                console.error("Logout error:", error);
+            }
+        });
+
+        // Auto-calculate Subtotal (単価 x 個数)
+        function updateSubtotal() {
+            const price = parseFloat(unitPriceInput.value) || 0;
+            const qty = parseInt(quantityInput.value) || 0;
+            const total = price * qty;
+            calculatedTotal.textContent = `¥${total.toLocaleString()}`;
+        }
+
+        unitPriceInput.addEventListener('input', updateSubtotal);
+        quantityInput.addEventListener('input', updateSubtotal);
+
+        // Form Submission (Add or Edit Sale Record)
+        posForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            formErrorAlert.classList.add('hidden');
+
+            const itemName = itemNameInput.value.trim();
+            const unitPrice = parseFloat(unitPriceInput.value);
+            const quantity = parseInt(quantityInput.value);
+            const saleDate = saleDateInput.value;
+            const memo = memoInput.value.trim();
+            const editId = editDocIdInput.value;
+
+            // Input Validation Checks
+            if (!itemName) {
+                showFormError("商品名を入力してください。");
+                return;
+            }
+            if (isNaN(unitPrice) || unitPrice < 0) {
+                showFormError("単価には0以上の数値を入力してください。");
+                return;
+            }
+            if (isNaN(quantity) || quantity <= 0) {
+                showFormError("個数には1以上の数値を入力してください。");
+                return;
+            }
+            if (!saleDate) {
+                showFormError("日付を選択してください。");
+                return;
+            }
+
+            const totalPrice = unitPrice * quantity;
+
+            try {
+                const salesRef = collection(db, "sales");
+
+                if (editId) {
+                    // Update existing document
+                    const docRef = doc(db, "sales", editId);
+                    await updateDoc(docRef, {
+                        itemName,
+                        unitPrice,
+                        quantity,
+                        totalPrice,
+                        saleDate,
+                        memo,
+                        updatedAt: serverTimestamp()
+                    });
+                } else {
+                    // Add new document
+                    await addDoc(salesRef, {
+                        itemName,
+                        unitPrice,
+                        quantity,
+                        totalPrice,
+                        saleDate,
+                        memo,
+                        userId: currentUser.uid,
+                        userEmail: currentUser.email || "unknown",
+                        userName: currentUser.displayName || "ユーザー",
+                        createdAt: serverTimestamp()
+                    });
+                }
+
+                resetForm();
+            } catch (err) {
+                console.error("Firestore Save Error:", err);
+                showFormError("保存中にエラーが発生しました。");
+            }
+        });
+
+        function showFormError(msg) {
+            formErrorText.textContent = msg;
+            formErrorAlert.classList.remove('hidden');
+        }
+
+        function resetForm() {
+            posForm.reset();
+            editDocIdInput.value = "";
+            saleDateInput.value = new Date().toISOString().split('T')[0];
+            quantityInput.value = "1";
+            calculatedTotal.textContent = "¥0";
+            submitBtnText.textContent = "登録する";
+            formTitle.querySelector('span').innerHTML = '<i class="fa-solid fa-circle-plus text-indigo-600 mr-2"></i>売上データを登録';
+            cancelEditBtn.classList.add('hidden');
+            formErrorAlert.classList.add('hidden');
+        }
+
+        cancelEditBtn.addEventListener('click', resetForm);
+
+        // Realtime Data Sync
+        function listenToSalesData() {
+            const salesRef = collection(db, "sales");
+
+            onSnapshot(salesRef, (snapshot) => {
+                allSalesData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                // Client-side sort by date descending, then creation time
+                allSalesData.sort((a, b) => {
+                    if (b.saleDate !== a.saleDate) {
+                        return b.saleDate.localeCompare(a.saleDate);
+                    }
+                    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+                });
+
+                renderDataAndKPIs();
+            }, (error) => {
+                console.error("Snapshot error:", error);
+            });
+        }
+
+        function renderDataAndKPIs() {
+            // Apply User Filter (My data vs All data)
+            let filtered = allSalesData.filter(item => {
+                if (activeFilter === 'my') {
+                    return item.userId === currentUser.uid;
+                }
+                return true;
+            });
+
+            // Apply Search & Date Filters
+            const searchText = searchInput.value.toLowerCase().trim();
+            const dateVal = dateFilterInput.value;
+
+            if (searchText) {
+                filtered = filtered.filter(item => item.itemName.toLowerCase().includes(searchText));
+            }
+            if (dateVal) {
+                filtered = filtered.filter(item => item.saleDate === dateVal);
+            }
+
+            // Update KPI Stats
+            updateKPIs(filtered);
+
+            // Render Table & Mobile Cards
+            renderTableAndCards(filtered);
+
+            // Update Sales Chart
+            updateChart(filtered);
+        }
+
+        function updateKPIs(data) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            
+            let todaySum = 0;
+            let grandSum = 0;
+
+            data.forEach(item => {
+                const total = item.totalPrice || (item.unitPrice * item.quantity) || 0;
+                grandSum += total;
+                if (item.saleDate === todayStr) {
+                    todaySum += total;
+                }
+            });
+
+            document.getElementById('kpiTodayTotal').textContent = `¥${todaySum.toLocaleString()}`;
+            document.getElementById('kpiGrandTotal').textContent = `¥${grandSum.toLocaleString()}`;
+            document.getElementById('kpiTotalCount').textContent = `${data.length} 件`;
+        }
+
+        function renderTableAndCards(data) {
+            salesTableBody.innerHTML = '';
+            salesMobileCards.innerHTML = '';
+
+            if (data.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            data.forEach(item => {
+                const total = item.totalPrice || (item.unitPrice * item.quantity) || 0;
+                const isOwner = item.userId === currentUser.uid;
+
+                // Desktop Table Row
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium whitespace-nowrap">${escapeHtml(item.saleDate)}</td>
+                    <td class="py-3 px-4 font-bold text-slate-800">${escapeHtml(item.itemName)}</td>
+                    <td class="py-3 px-4 text-right">¥${(item.unitPrice || 0).toLocaleString()}</td>
+                    <td class="py-3 px-4 text-center">${item.quantity || 1}</td>
+                    <td class="py-3 px-4 text-right font-black text-indigo-600">¥${total.toLocaleString()}</td>
+                    <td class="py-3 px-4 text-xs text-slate-500 max-w-[150px] truncate" title="${escapeHtml(item.memo || '')}">${escapeHtml(item.memo || '-')}</td>
+                    <td class="py-3 px-4 text-xs whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-medium">${escapeHtml(item.userName || 'ユーザー')}</span></td>
+                    <td class="py-3 px-4 text-center whitespace-nowrap">
+                        ${isOwner ? `
+                            <button class="edit-btn text-indigo-600 hover:text-indigo-800 mr-2 p-1 text-xs" data-id="${item.id}" title="編集">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button class="delete-btn text-red-500 hover:text-red-700 p-1 text-xs" data-id="${item.id}" title="削除">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        ` : `<span class="text-xs text-slate-300">-</span>`}
+                    </td>
+                `;
+                salesTableBody.appendChild(tr);
+
+                // Mobile Card View
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2";
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-400"><i class="fa-regular fa-calendar mr-1"></i>${escapeHtml(item.saleDate)}</span>
+                        <span class="text-xs bg-indigo-50 text-indigo-700 font-medium px-2 py-0.5 rounded-full">${escapeHtml(item.userName || 'ユーザー')}</span>
+                    </div>
+                    <div class="flex items-baseline justify-between pt-1">
+                        <h3 class="font-bold text-slate-800 text-base">${escapeHtml(item.itemName)}</h3>
+                        <span class="font-black text-indigo-600 text-lg">¥${total.toLocaleString()}</span>
+                    </div>
+                    <div class="text-xs text-slate-500 flex items-center justify-between pt-1 border-t border-slate-200/60">
+                        <span>単価: ¥${(item.unitPrice || 0).toLocaleString()} × ${item.quantity || 1}個</span>
+                        ${item.memo ? `<span class="italic max-w-[150px] truncate">メモ: ${escapeHtml(item.memo)}</span>` : ''}
+                    </div>
+                    ${isOwner ? `
+                        <div class="flex items-center justify-end space-x-3 pt-2 text-xs">
+                            <button class="edit-btn text-indigo-600 font-semibold hover:underline flex items-center space-x-1" data-id="${item.id}">
+                                <i class="fa-solid fa-pen-to-square"></i> 編集
+                            </button>
+                            <button class="delete-btn text-red-500 font-semibold hover:underline flex items-center space-x-1" data-id="${item.id}">
+                                <i class="fa-solid fa-trash-can"></i> 削除
+                            </button>
+                        </div>
+                    ` : ''}
+                `;
+                salesMobileCards.appendChild(card);
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    startEditing(id);
+                });
+            });
+
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    deleteRecord(id);
+                });
+            });
+        }
+
+        // Edit Functionality
+        function startEditing(id) {
+            const item = allSalesData.find(d => d.id === id);
+            if (!item) return;
+
+            editDocIdInput.value = item.id;
+            itemNameInput.value = item.itemName;
+            unitPriceInput.value = item.unitPrice;
+            quantityInput.value = item.quantity;
+            saleDateInput.value = item.saleDate;
+            memoInput.value = item.memo || '';
+
+            updateSubtotal();
+
+            submitBtnText.textContent = "更新する";
+            formTitle.querySelector('span').innerHTML = '<i class="fa-solid fa-pen-to-square text-indigo-600 mr-2"></i>売上データを編集';
+            cancelEditBtn.classList.remove('hidden');
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Delete Functionality
+        async function deleteRecord(id) {
+            if (!confirm("この売上データを削除してもよろしいですか？")) return;
+
+            try {
+                await deleteDoc(doc(db, "sales", id));
+            } catch (err) {
+                console.error("Delete Error:", err);
+                alert("削除に失敗しました。");
+            }
+        }
+
+        // Render Chart.js Bar Chart
+        function updateChart(data) {
+            const ctx = document.getElementById('salesChart').getContext('2d');
+
+            // Group sales by date
+            const dateMap = {};
+            data.forEach(item => {
+                const d = item.saleDate;
+                const total = item.totalPrice || (item.unitPrice * item.quantity) || 0;
+                dateMap[d] = (dateMap[d] || 0) + total;
+            });
+
+            // Sort dates chronologically
+            const sortedDates = Object.keys(dateMap).sort();
+            const totals = sortedDates.map(d => dateMap[d]);
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedDates,
+                    datasets: [{
+                        label: '売上金額 (円)',
+                        data: totals,
+                        backgroundColor: 'rgba(79, 70, 229, 0.75)',
+                        borderColor: 'rgba(79, 70, 229, 1)',
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '¥' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Filter Buttons Behavior
+        filterMyDataBtn.addEventListener('click', () => {
+            activeFilter = 'my';
+            filterMyDataBtn.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-white text-indigo-600 shadow-sm transition-all";
+            filterAllDataBtn.className = "px-3 py-1.5 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+            renderDataAndKPIs();
+        });
+
+        filterAllDataBtn.addEventListener('click', () => {
+            activeFilter = 'all';
+            filterAllDataBtn.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-white text-indigo-600 shadow-sm transition-all";
+            filterMyDataBtn.className = "px-3 py-1.5 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+            renderDataAndKPIs();
+        });
+
+        searchInput.addEventListener('input', renderDataAndKPIs);
+        dateFilterInput.addEventListener('change', renderDataAndKPIs);
+
+        clearFiltersBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            dateFilterInput.value = '';
+            renderDataAndKPIs();
+        });
+
+        // XSS Prevention Utility
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
